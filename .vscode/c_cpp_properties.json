@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "/usr/lib/gcc/x86_64-linux-gnu/9/include",
+                "/usr/local/include",
+                "/usr/include/x86_64-linux-gnu",
+                "/usr/include",
+                "/home/hugo/.conan/data/sqlite3/3.34.0/_/_/package/196e826ce6aa457b7d7cba5dec9477732da1e9ad/include",
+                "/home/hugo/.conan/data/openssl/1.1.1i/_/_/package/2b1e5ff9df96aaf5924c273e1368c632fcb32dd2/include",
+                "${workspaceFolder}/coruja/include/**",
+                "${workspaceFolder}/coruja/src/**"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/clang",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "clang-x64",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+            "configurationProvider": "ms-vscode.cmake-tools"
+        }
+    ],
+    "version": 4
+}

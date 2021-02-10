@@ -1,0 +1,10 @@
+[requires]
+openssl/1.1.1i
+sqlite3/3.34.0
+
+[generators]
+cmake
+
+[options]
+openssl:shared=False
+sqlite3:shared=False
