@@ -4,6 +4,7 @@
 
 - Python 3
 - C11 Compiler (clang or gcc recommended)
+- A modern CMake (you can use asdf-vm to get it)
 
 ## Setup
 
@@ -14,7 +15,7 @@ python -m venv venv
 pip install -U pip
 pip install -r dev-requirements.txt
 
-mkdir build && build
+mkdir build
 ```
 
 ## Installing/Building dependencies
@@ -34,6 +35,9 @@ make
 
 ## Test
 
+After building the project, just call the test
+
 ```
 ./build/bin/coruja-unit-tests
 ```
+
