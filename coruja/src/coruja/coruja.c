@@ -129,12 +129,12 @@ static int on_check_thread_start(void* thread_context) {
 
     // Setup ssl context
     SSL_CTX* context = SSL_CTX_new(TLS_client_method());
+
     SSL_CTX_set_verify(context, /*SSL_VERIFY_NONE*/ SSL_VERIFY_PEER, on_verify);
     SSL_CTX_set_verify_depth(context, 10);
     
     // TODO discover how to disable server certificate validation
     SSL* ssl = SSL_new(context);
-    SSL_set_verify(ssl, SSL_VERIFY_PEER, on_verify);
 
     int rc;
     if (!(rc = SSL_set1_host(ssl, address))) {
