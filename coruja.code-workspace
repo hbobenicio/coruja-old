@@ -1,0 +1,38 @@
+{
+	"folders": [
+		{
+			"path": ".",
+			"name": "coruja-workspace"
+		},
+		{
+			"path": "./coruja"
+		},
+		{
+			"path": "./coruja-cli"
+		},
+		{
+			"path": "./coruja-frontend"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"*.COBOL*": "cobol",
+			"*.COB*": "cobol",
+			"*.COBCOPY*": "cobol",
+			"*.COPYBOOK*": "cobol",
+			"*.COPY*": "cobol",
+			"*.PL1*": "pl1",
+			"*.PLI*": "pl1",
+			"*.INC*": "pl1",
+			"*.INCLUDE*": "pl1",
+			"*.JCL*": "jcl",
+			"*.ASM*": "hlasm",
+			"*.ASSEMBLE*": "hlasm",
+			"*.HLASM*": "hlasm",
+			"*.HLA*": "hlasm",
+			"*.tcc": "c",
+			"fstream": "c",
+			"cstdarg": "c"
+		}
+	}
+}

@@ -66,7 +66,7 @@ void coruja_log_error(const char* fmt, ...) {
         now->tm_mon + 1,
         now->tm_hour,
         now->tm_min,
-        now->tm_sec,
+        now->tm_sec
     );
     vfprintf(stderr, fmt, args);
     fprintf(stderr, "\n");

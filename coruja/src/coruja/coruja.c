@@ -26,7 +26,9 @@ void coruja_setup() {
     coruja_log_info("%s", OPENSSL_VERSION_TEXT);
 
     OpenSSL_add_all_algorithms();
+    ERR_load_BIO_strings();
     ERR_load_crypto_strings();
+    ERR_load_SSL_strings();
 }
 
 void coruja_cleanup() {
@@ -36,6 +38,7 @@ void coruja_cleanup() {
 int coruja_check_urls(const char** urls, size_t urls_length) {
     thrd_t threads[urls_length];
 
+    // Create worker threads to do the check
     for (size_t i = 0; i < urls_length; i++) {
         coruja_log_info("checking address '%s'...", urls[i]);
         if (thrd_create(&threads[i], on_check_thread_start, (void*) urls[i]) != thrd_success) {
@@ -43,6 +46,8 @@ int coruja_check_urls(const char** urls, size_t urls_length) {
             exit(EXIT_FAILURE);
         }
     }
+
+    // Wait for them to complete (not handling their return values atm)
     for (size_t i = 0; i < urls_length; i++) {
         int thread_rc;
         if (thrd_join(threads[i], &thread_rc) != thrd_success) {
@@ -55,7 +60,7 @@ int coruja_check_urls(const char** urls, size_t urls_length) {
 }
 
 int coruja_parse_cert(const char *crt, size_t crt_size) {
-    // TODO RAII - BIO, X509,
+    // TODO RAII - BIO, X509, etc
     BIO *buf = BIO_new_mem_buf(crt, (int)crt_size);
     if (!buf)
     {
@@ -128,36 +133,83 @@ static int on_check_thread_start(void* thread_context) {
     // TODO split this address if port is also defined
 
     // Setup ssl context
+    // SSL_CONF_CTX *context_config = SSL_CONF_CTX_new();
+    // SSL_CONF_CTX_set_flags(context_config, SSL_CONF_FLAG_CLIENT | SSL_CONF_FLAG_CMDLINE);
     SSL_CTX* context = SSL_CTX_new(TLS_client_method());
-
+    if (!context) {
+        coruja_log_error("check: openssl: could not allocate a new SSL_CTX");
+        return 1;
+    }
     SSL_CTX_set_verify(context, /*SSL_VERIFY_NONE*/ SSL_VERIFY_PEER, on_verify);
     SSL_CTX_set_verify_depth(context, 10);
+
+    BIO* ssl_bio = BIO_new_ssl_connect(context);
+    if (!ssl_bio) {
+        coruja_log_error("check: openssl: could not allocate a new ssl connect BIO");
+        SSL_CTX_free(context);
+        return 1;
+    }
     
     // TODO discover how to disable server certificate validation
-    SSL* ssl = SSL_new(context);
+    //SSL* ssl = SSL_new(context);
+    SSL* ssl = NULL;
+    // Borrowed reference. Do not free it.
+    BIO_get_ssl(ssl_bio, &ssl);
+    if (!ssl) {
+        coruja_log_error("check: openssl: could not get ssl session reference");
+        BIO_free_all(ssl_bio);
+        SSL_CTX_free(context);
+        return 1;
+    }
+
+    SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
 
     int rc;
-    if (!(rc = SSL_set1_host(ssl, address))) {
-        coruja_log_error("check: openssl[%d]: could not set host for address '%s'", rc, address);
-        SSL_free(ssl);
+    // if (!(rc = SSL_set1_host(ssl, address))) {
+    //     coruja_log_error("check: openssl[%d]: could not set host for address '%s'", rc, address);
+    //     SSL_free(ssl);
+    //     SSL_CTX_free(context);
+    //     //SSL_CONF_CTX_free(context_config);
+    //     return rc;
+    // }
+
+    long wat = BIO_set_conn_hostname(ssl_bio, address);
+
+    if(BIO_do_handshake(ssl_bio) <= 0) {
+        coruja_log_error("check: openssl: could not establish TLS connection");
+        //ERR_print_errors_fp(stderr);
+
+        BIO_free_all(ssl_bio);
         SSL_CTX_free(context);
-        return rc;
+        return 1;
     }
 
-    coruja_log_info("conectando com o servidor...");
-    if (!(rc = SSL_connect(ssl))) {
-        coruja_log_error("check: openssl[%d]: could not connect to address '%s'", rc, address);
-        SSL_free(ssl);
-        SSL_CTX_free(context);
-        return rc;
-    }
-    coruja_log_info("conectado com sucesso.");
+    // coruja_log_info("conectando com o servidor...");
+    // if (!(rc = SSL_connect(ssl))) {
+    //     coruja_log_error("check: openssl[%d]: could not connect to address '%s'", rc, address);
+    //     BIO_free(ssl_bio);
+    //     //SSL_free(ssl);
+    //     SSL_CTX_free(context);
+    //     //SSL_CONF_CTX_free(context_config);
+    //     return rc;
+    // }
+    // coruja_log_info("conectado com sucesso.");
+
+    /* Could examine ssl here to get connection info */
+    // BIO_puts(sbio, "GET / HTTP/1.0\n\n");
+    // for(;;) {      
+    //         len = BIO_read(sbio, tmpbuf, 1024);
+    //         if(len <= 0) break;
+    //         BIO_write(out, tmpbuf, len);
+    // }
 
     STACK_OF(X509) *cert_chain = SSL_get_peer_cert_chain(ssl);
     if (cert_chain == NULL) {
         coruja_log_warn("check: openssl: could not get peer cert chain for address '%s'", address);
-        SSL_free(ssl);
+        BIO_free_all(ssl_bio);
+        //SSL_free(ssl);
         SSL_CTX_free(context);
+        //SSL_CONF_CTX_free(context_config);
         return 1;
     }
 
@@ -169,6 +221,8 @@ static int on_check_thread_start(void* thread_context) {
         puts("");
     }
 
+    //SSL_shutdown(ssl);
+
     // From this stack, pass it to coruja_parse_cert maybe... (or create another method)
 
     // if (SSL_get_verify_result(ssl) == X509_V_OK) {
@@ -179,8 +233,10 @@ static int on_check_thread_start(void* thread_context) {
     //   }
     // }
 
-    SSL_free(ssl);
+    BIO_free_all(ssl_bio);
+    //SSL_free(ssl);
     SSL_CTX_free(context);
+    //SSL_CONF_CTX_free(context_config);
 
     return 0;
 }
