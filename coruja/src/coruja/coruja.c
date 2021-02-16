@@ -16,6 +16,7 @@
 
 // #include <sqlite3.h>
 
+#include <coruja/ansi.h>
 #include <coruja/coruja.h>
 #include <coruja/log.h>
 
@@ -213,12 +214,66 @@ static int on_check_thread_start(void* thread_context) {
         return 1;
     }
 
-    puts("certificate chain:");
+    printf(CORUJA_BRIGHT_CYAN_BOLD "%s:" CORUJA_ANSI_GFX_RESET "\n", address);
     for (X509* cert = sk_X509_pop(cert_chain); cert != NULL; cert = sk_X509_pop(cert_chain)) {
         X509_NAME* subject_name = X509_get_subject_name(cert);
-        printf("Subject: ");
+        printf(CORUJA_BRIGHT_CYAN_BOLD "  Subject: " CORUJA_ANSI_GFX_RESET);
         X509_NAME_print_ex_fp(stdout, subject_name, 0, 0);
         puts("");
+
+        const ASN1_TIME *not_before = X509_get0_notBefore(cert);
+        const ASN1_TIME *not_after = X509_get0_notAfter(cert);
+
+        BIO *bio_stdout = BIO_new_fp(stdout, BIO_NOCLOSE);
+
+        // @see https://www.openssl.org/docs/man1.1.1/man3/ASN1_TIME_print.html
+        printf(CORUJA_BRIGHT_CYAN_BOLD "    Not Before: " CORUJA_ANSI_GFX_RESET);
+        int rc = ASN1_TIME_print(bio_stdout, not_before);
+        printf(CORUJA_BRIGHT_CYAN_BOLD "\n    Not After: " CORUJA_ANSI_GFX_RESET);
+        rc = ASN1_TIME_print(bio_stdout, not_after);
+        puts("");
+
+        // now's epoch time
+        time_t now = time(NULL);
+        ASN1_TIME now_asn1;
+        if(ASN1_TIME_set(&now_asn1, now) == NULL) {
+            coruja_log_error("check: openssl: could not create ASN1_TIME from now");
+            BIO_free_all(bio_stdout);
+            continue;
+        }
+
+        //struct tm* tm_now = localtime(&now);
+        int before_cmp = ASN1_TIME_cmp_time_t(not_before, now); // ok if -1
+        int after_cmp = ASN1_TIME_cmp_time_t(not_after, now);   // ok if 1
+        bool not_expired = before_cmp < 0 && after_cmp > 0;
+
+        int days_until_expiration;
+        int secs_until_expiration;
+        if (!ASN1_TIME_diff(&days_until_expiration, &secs_until_expiration, &now_asn1, not_after)) {
+            coruja_log_error("check: openssl: could not calculate time diff from now until expiration");
+            BIO_free_all(bio_stdout);
+            continue;
+        }
+
+        // TODO Make color ranges!
+        if (days_until_expiration < 2 * 30) {
+            printf(CORUJA_BRIGHT_CYAN_BOLD "    Expires in: " CORUJA_BRIGHT_RED_BOLD "%d" CORUJA_ANSI_GFX_RESET "\n", days_until_expiration);
+        } else if (days_until_expiration < 4 * 30) {
+            printf(CORUJA_BRIGHT_CYAN_BOLD "    Expires in: " CORUJA_BRIGHT_YELLOW_BOLD "%d" CORUJA_ANSI_GFX_RESET "\n", days_until_expiration);
+        } else {
+            printf(CORUJA_BRIGHT_CYAN_BOLD "    Expires in: " CORUJA_BRIGHT_GREEN_BOLD "%d" CORUJA_ANSI_GFX_RESET "\n", days_until_expiration);
+        }
+
+        if (not_expired) {
+            puts("    ✅ Not Expired!");
+        } else {
+            puts("    ❌ Expired!");
+        }
+
+
+        BIO_free_all(bio_stdout);
+
+        // TODO Count number of days until expiration
     }
 
     //SSL_shutdown(ssl);
