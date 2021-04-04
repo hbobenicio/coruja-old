@@ -11,6 +11,7 @@ project(coruja-core
 add_library(${PROJECT_NAME} STATIC
 	"${PROJECT_SOURCE_DIR}/src/coruja/coruja.c"
 	"${PROJECT_SOURCE_DIR}/src/coruja/log.c"
+	"${PROJECT_SOURCE_DIR}/src/coruja/address.c"
 )
 target_compile_options(${PROJECT_NAME} PRIVATE "-std=c11")
 target_include_directories(${PROJECT_NAME}

@@ -1,6 +1,7 @@
 /**
  * @see https://gist.github.com/cseelye/adcd900768ff61f697e603fd41c67625
  */
+#include <string.h>
 #include <time.h>
 #include <assert.h>
 #include <stdbool.h>
@@ -19,11 +20,18 @@
 #include <coruja/ansi.h>
 #include <coruja/coruja.h>
 #include <coruja/log.h>
+#include "address.h"
 
 static int on_check_thread_start(void* thread_context);
 int on_verify(int preverify_ok, X509_STORE_CTX *x509_ctx);
 
 void coruja_setup() {
+    printf(CORUJA_BRIGHT_WHITE_BOLD);
+    printf("\t\t,___,\n");
+    printf("\t\t(0,0)\n");
+    printf("\t\t/)__)\n");
+    printf("\t\t \" \"\n");
+    printf(CORUJA_ANSI_GFX_RESET);
     coruja_log_info("%s", OPENSSL_VERSION_TEXT);
 
     OpenSSL_add_all_algorithms();
@@ -131,7 +139,17 @@ int coruja_parse_cert(const char *crt, size_t crt_size) {
 
 static int on_check_thread_start(void* thread_context) {
     const char* address = (const char*) thread_context;
-    // TODO split this address if port is also defined
+    int address_len = strlen(address);
+
+    CorujaAddress host_port;
+    if (!coruja_address_parse(address, &host_port)) {
+        coruja_log_error("check: parsing error: invalid input address: '%s'\n", address);
+        return 1;
+    }
+    coruja_log_info("host: %s", host_port.host);
+    coruja_log_info("port: %s", host_port.port);
+
+    // TODO after the split, use SSL_set_tlsext_host_name() to set the SNI extension correctly
 
     // Setup ssl context
     // SSL_CONF_CTX *context_config = SSL_CONF_CTX_new();
@@ -166,6 +184,7 @@ static int on_check_thread_start(void* thread_context) {
     SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
 
     int rc;
+
     // if (!(rc = SSL_set1_host(ssl, address))) {
     //     coruja_log_error("check: openssl[%d]: could not set host for address '%s'", rc, address);
     //     SSL_free(ssl);
@@ -173,7 +192,19 @@ static int on_check_thread_start(void* thread_context) {
     //     //SSL_CONF_CTX_free(context_config);
     //     return rc;
     // }
-
+    const char* comma = strchr(address, ':');
+    if (!comma) {
+        if (SSL_set_tlsext_host_name(ssl, address) == 0) {
+            coruja_log_error("check: openssl: could not set servername for SNI");
+            BIO_free_all(ssl_bio);
+            SSL_CTX_free(context);
+            return 1;
+        }
+    } else {
+        //size_t hostname_slice_size = comma - address;
+        // TODO resume logic here...
+        
+    }
     long wat = BIO_set_conn_hostname(ssl_bio, address);
 
     if(BIO_do_handshake(ssl_bio) <= 0) {
@@ -255,25 +286,21 @@ static int on_check_thread_start(void* thread_context) {
             continue;
         }
 
-        // TODO Make color ranges!
-        if (days_until_expiration < 2 * 30) {
-            printf(CORUJA_BRIGHT_CYAN_BOLD "    Expires in: " CORUJA_BRIGHT_RED_BOLD "%d" CORUJA_ANSI_GFX_RESET "\n", days_until_expiration);
-        } else if (days_until_expiration < 4 * 30) {
-            printf(CORUJA_BRIGHT_CYAN_BOLD "    Expires in: " CORUJA_BRIGHT_YELLOW_BOLD "%d" CORUJA_ANSI_GFX_RESET "\n", days_until_expiration);
-        } else {
-            printf(CORUJA_BRIGHT_CYAN_BOLD "    Expires in: " CORUJA_BRIGHT_GREEN_BOLD "%d" CORUJA_ANSI_GFX_RESET "\n", days_until_expiration);
-        }
-
         if (not_expired) {
+            if (days_until_expiration < 2 * 30) {
+                printf(CORUJA_BRIGHT_CYAN_BOLD "    Expires in: " CORUJA_BRIGHT_RED_BOLD "%d day(s)" CORUJA_ANSI_GFX_RESET "\n", days_until_expiration);
+            } else if (days_until_expiration < 4 * 30) {
+                printf(CORUJA_BRIGHT_CYAN_BOLD "    Expires in: " CORUJA_BRIGHT_YELLOW_BOLD "%d days(s)" CORUJA_ANSI_GFX_RESET "\n", days_until_expiration);
+            } else {
+                printf(CORUJA_BRIGHT_CYAN_BOLD "    Expires in: " CORUJA_BRIGHT_GREEN_BOLD "%d" CORUJA_ANSI_GFX_RESET "\n", days_until_expiration);
+            }
             puts("    ✅ Not Expired!");
         } else {
+            printf(CORUJA_BRIGHT_CYAN_BOLD "    Expired " CORUJA_BRIGHT_RED_BOLD "%d day(s) ago" CORUJA_ANSI_GFX_RESET "\n", days_until_expiration);
             puts("    ❌ Expired!");
         }
 
-
         BIO_free_all(bio_stdout);
-
-        // TODO Count number of days until expiration
     }
 
     //SSL_shutdown(ssl);
@@ -292,7 +319,6 @@ static int on_check_thread_start(void* thread_context) {
     //SSL_free(ssl);
     SSL_CTX_free(context);
     //SSL_CONF_CTX_free(context_config);
-
     return 0;
 }
 
